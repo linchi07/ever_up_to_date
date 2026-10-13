@@ -1,19 +1,41 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-
 import 'ever_up_to_date_platform_interface.dart';
 
-/// An implementation of [EverUpToDatePlatform] that uses method channels.
+/// Method channel implementation of [EverUpToDatePlatform].
 class MethodChannelEverUpToDate extends EverUpToDatePlatform {
-  /// The method channel used to interact with the native platform.
+  static const String CHANNEL_NAME = 'ever_up_to_date';
+  static const String METHOD_INSTALL_APK = 'installApk';
+  static const String METHOD_CAN_REQUEST_PACKAGE_INSTALLS =
+      'canRequestPackageInstalls';
+  static const String METHOD_OPEN_INSTALL_PERMISSION_SETTINGS =
+      'openInstallPermissionSettings';
+
   @visibleForTesting
-  final methodChannel = const MethodChannel('ever_up_to_date');
+  final MethodChannel methodChannel = const MethodChannel(CHANNEL_NAME);
 
   @override
-  Future<String?> getPlatformVersion() async {
-    final version = await methodChannel.invokeMethod<String>(
-      'getPlatformVersion',
+  Future<bool> installApk(String filePath) async {
+    final result = await methodChannel.invokeMethod<bool>(
+      METHOD_INSTALL_APK,
+      {'filePath': filePath},
     );
-    return version;
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> canRequestPackageInstalls() async {
+    final result = await methodChannel.invokeMethod<bool>(
+      METHOD_CAN_REQUEST_PACKAGE_INSTALLS,
+    );
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> openInstallPermissionSettings() async {
+    final result = await methodChannel.invokeMethod<bool>(
+      METHOD_OPEN_INSTALL_PERMISSION_SETTINGS,
+    );
+    return result ?? false;
   }
 }

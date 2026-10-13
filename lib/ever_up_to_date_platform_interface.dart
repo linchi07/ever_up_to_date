@@ -1,29 +1,39 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-
 import 'ever_up_to_date_method_channel.dart';
 
+/// Platform interface for native operating system interactions.
 abstract class EverUpToDatePlatform extends PlatformInterface {
-  /// Constructs a EverUpToDatePlatform.
-  EverUpToDatePlatform() : super(token: _token);
+  EverUpToDatePlatform() : super(token: _TOKEN);
 
-  static final Object _token = Object();
+  static final Object _TOKEN = Object();
 
   static EverUpToDatePlatform _instance = MethodChannelEverUpToDate();
 
   /// The default instance of [EverUpToDatePlatform] to use.
-  ///
-  /// Defaults to [MethodChannelEverUpToDate].
   static EverUpToDatePlatform get instance => _instance;
 
-  /// Platform-specific implementations should set this with their own
-  /// platform-specific class that extends [EverUpToDatePlatform] when
-  /// they register themselves.
+  /// Sets a platform-specific implementation.
   static set instance(EverUpToDatePlatform instance) {
-    PlatformInterface.verifyToken(instance, _token);
+    PlatformInterface.verifyToken(instance, _TOKEN);
     _instance = instance;
   }
 
-  Future<String?> getPlatformVersion() {
-    throw UnimplementedError('platformVersion() has not been implemented.');
+  /// Installs an APK file from local [filePath] on Android.
+  Future<bool> installApk(String filePath) {
+    throw UnimplementedError('installApk() has not been implemented.');
+  }
+
+  /// Checks if the app is granted permission to install unknown apps on Android.
+  Future<bool> canRequestPackageInstalls() {
+    throw UnimplementedError(
+      'canRequestPackageInstalls() has not been implemented.',
+    );
+  }
+
+  /// Opens the system unknown app sources permission page on Android.
+  Future<bool> openInstallPermissionSettings() {
+    throw UnimplementedError(
+      'openInstallPermissionSettings() has not been implemented.',
+    );
   }
 }

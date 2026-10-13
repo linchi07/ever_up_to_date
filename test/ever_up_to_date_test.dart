@@ -7,22 +7,44 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 class MockEverUpToDatePlatform
     with MockPlatformInterfaceMixin
     implements EverUpToDatePlatform {
+  bool installApkCalled = false;
+  String? lastApkPath;
+
   @override
-  Future<String?> getPlatformVersion() => Future.value('42');
+  Future<bool> installApk(String filePath) {
+    installApkCalled = true;
+    lastApkPath = filePath;
+    return Future.value(true);
+  }
+
+  @override
+  Future<bool> canRequestPackageInstalls() {
+    return Future.value(true);
+  }
+
+  @override
+  Future<bool> openInstallPermissionSettings() {
+    return Future.value(true);
+  }
 }
 
 void main() {
-  final EverUpToDatePlatform initialPlatform = EverUpToDatePlatform.instance;
+  final initialPlatform = EverUpToDatePlatform.instance;
 
-  test('$MethodChannelEverUpToDate is the default instance', () {
+  test('default platform instance is MethodChannelEverUpToDate', () {
     expect(initialPlatform, isInstanceOf<MethodChannelEverUpToDate>());
   });
 
-  test('getPlatformVersion', () async {
-    EverUpToDate everUpToDatePlugin = EverUpToDate();
-    MockEverUpToDatePlatform fakePlatform = MockEverUpToDatePlatform();
-    EverUpToDatePlatform.instance = fakePlatform;
+  test('EverUpToDate facade delegates Android permission calls', () async {
+    final mockPlatform = MockEverUpToDatePlatform();
+    EverUpToDatePlatform.instance = mockPlatform;
 
-    expect(await everUpToDatePlugin.getPlatformVersion(), '42');
+    final updater = EverUpToDate.instance;
+
+    final canInstall = await updater.canRequestPackageInstalls();
+    expect(canInstall, isTrue);
+
+    final openSettings = await updater.openInstallPermissionSettings();
+    expect(openSettings, isTrue);
   });
 }

@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "app_id": "com.everuptodate.example",
+  "channels": {
+    "stable": {
+      "version": "1.0.0",
+      "build_number": 100,
+      "mandatory": false,
+      "pub_date": "2026-10-13T12:00:00Z",
+      "release_notes": {
+        "zh-CN": "1. 初始版本发布\n2. 基础功能支持",
+        "en-US": "1. Initial release\n2. Basic features"
+      },
+      "platforms": {
+        "android": {
+          "type": "direct_apk",
+          "url": "https://example.com/downloads/app-v1.0.0.apk",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_ed25519": ""
+        },
+        "windows": {
+          "type": "inno_setup",
+          "url": "https://example.com/downloads/app-setup-v1.0.0.exe",
+          "installer_args": ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"]
+        },
+        "ios": {
+          "type": "app_store",
+          "url": "https://apps.apple.com/app/id000000000"
+        }
+      }
+    },
+    "beta": {
+      "version": "1.1.0-beta.1",
+      "build_number": 110,
+      "mandatory": false,
+      "pub_date": "2026-10-13T18:00:00Z",
+      "release_notes": {
+        "zh-CN": "1. [测试版] 全新架构体验\n2. 优化更新检查流",
+        "en-US": "1. [Beta] New architecture preview\n2. Optimized update check stream"
+      },
+      "platforms": {
+        "android": {
+          "type": "direct_apk",
+          "url": "https://example.com/downloads/app-v1.1.0-beta.apk",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "windows": {
+          "type": "inno_setup",
+          "url": "https://example.com/downloads/app-setup-v1.1.0-beta.exe"
+        },
+        "ios": {
+          "type": "testflight",
+          "url": "https://testflight.apple.com/join/demo123"
+        }
+      }
+    }
+  }
+}
