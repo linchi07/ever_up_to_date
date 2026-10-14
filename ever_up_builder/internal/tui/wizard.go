@@ -9,6 +9,7 @@ import (
 	"ever_up_builder/internal/crypto"
 	"ever_up_builder/internal/detector"
 	"ever_up_builder/internal/generator"
+	"ever_up_builder/internal/gh"
 	"ever_up_builder/internal/secrets"
 	"github.com/charmbracelet/huh"
 )
@@ -86,17 +87,25 @@ func RunInitWizard(root string) error {
 	fmt.Print("\n" + secrets.FormatSecretsSummary(bundles))
 
 	if injectSecret {
-		if !crypto.IsGhAvailable() {
-			return fmt.Errorf("gh CLI is required for secret injection; local configuration was saved")
+		client := gh.NewClient(root)
+		auth, err := client.CheckAuth()
+		if err != nil {
+			return fmt.Errorf("GitHub CLI 尚未认证: %w\n请在终端运行 'gh auth login' 登录后再使用自动注入功能，本地配置已正常保存", err)
+		}
+		repo, err := client.GetRepository()
+		if err == nil && repo != "" {
+			fmt.Printf("检测到已登录 GitHub 账号 [%s]，正在将密钥注入目标仓库 [%s]...\n", auth.Account, repo)
+		} else {
+			fmt.Printf("检测到已登录 GitHub 账号 [%s]，正在注入密钥...\n", auth.Account)
 		}
 		if commonJSON, ok := bundles["EVERUP_COMMON_SECRETS"]; ok {
-			if err := crypto.SetGitHubSecretAt(root, "EVERUP_COMMON_SECRETS", commonJSON); err != nil {
+			if err := client.SetSecret("EVERUP_COMMON_SECRETS", commonJSON); err != nil {
 				return err
 			}
 		}
 		private, err := os.ReadFile(filepath.Join(root, ".everup", "signing-private.key"))
 		if err == nil {
-			_ = crypto.SetGitHubSecretAt(root, "EVERUP_SIGNING_PRIVATE_KEY", strings.TrimSpace(string(private)))
+			_ = client.SetSecret("EVERUP_SIGNING_PRIVATE_KEY", strings.TrimSpace(string(private)))
 		}
 		fmt.Println("已通过 gh CLI 成功注入 EVERUP_COMMON_SECRETS 与 EVERUP_SIGNING_PRIVATE_KEY！")
 	}

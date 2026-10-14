@@ -3,9 +3,9 @@ package crypto
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"ever_up_builder/internal/gh"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -31,8 +31,7 @@ func GenerateEd25519KeyPair() (*KeyPair, error) {
 
 // IsGhAvailable checks if GitHub CLI is installed on the host.
 func IsGhAvailable() bool {
-	_, err := exec.LookPath("gh")
-	return err == nil
+	return gh.NewClient(".").CheckInstalled() == nil
 }
 
 // SetGitHubSecret sets a secret in the current GitHub repository using gh CLI.
@@ -41,14 +40,7 @@ func SetGitHubSecret(secretName, secretValue string) error {
 }
 
 func SetGitHubSecretAt(root, secretName, secretValue string) error {
-	cmd := exec.Command("gh", "secret", "set", secretName)
-	cmd.Dir = root
-	cmd.Stdin = strings.NewReader(secretValue)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("gh secret set failed: %s (%w)", strings.TrimSpace(string(out)), err)
-	}
-	return nil
+	return gh.NewClient(root).SetSecret(secretName, secretValue)
 }
 
 // EnsureKeyPair preserves existing keys across repeated initialization.

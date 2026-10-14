@@ -62,3 +62,16 @@ func TestSecretsCommand(t *testing.T) {
 		t.Fatalf("secrets failed: %v", err)
 	}
 }
+
+func TestGhStatusCommand(t *testing.T) {
+	root := t.TempDir()
+	_ = run([]string{"gh-status", root})
+}
+
+func TestSecretsSyncCommand(t *testing.T) {
+	root := t.TempDir()
+	err := run([]string{"secrets", "sync", root})
+	if err != nil && !strings.Contains(err.Error(), "GitHub CLI") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

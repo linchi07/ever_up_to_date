@@ -5,6 +5,7 @@ import (
 	"ever_up_builder/internal/crypto"
 	"ever_up_builder/internal/detector"
 	"ever_up_builder/internal/generator"
+	"ever_up_builder/internal/gh"
 	"ever_up_builder/internal/loader"
 	"ever_up_builder/internal/model"
 	"ever_up_builder/internal/secrets"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
@@ -59,6 +61,27 @@ func run(args []string) error {
 		if failed {
 			return fmt.Errorf("resolve the reported configuration/dependency failures")
 		}
+	case "gh-status":
+		target := root
+		if len(args) > 1 {
+			target = args[1]
+		}
+		client := gh.NewClient(target)
+		if err := client.CheckInstalled(); err != nil {
+			return err
+		}
+		auth, err := client.CheckAuth()
+		if err != nil {
+			fmt.Println("GitHub CLI is installed, but not authenticated.")
+			fmt.Println("Details:", err)
+			return nil
+		}
+		fmt.Printf("GitHub CLI is authenticated!\nAccount: %s\nHost: %s\n", auth.Account, auth.Host)
+		repo, repoErr := client.GetRepository()
+		if repoErr == nil && repo != "" {
+			fmt.Printf("Current Repository: %s\n", repo)
+		}
+		return nil
 	case "gen-keys":
 		kp, err := crypto.EnsureKeyPair(root)
 		if err != nil {
@@ -127,8 +150,16 @@ func run(args []string) error {
 				if len(args) > 2 {
 					target = args[2]
 				}
-				if !crypto.IsGhAvailable() {
-					return fmt.Errorf("gh CLI is required to sync secrets to GitHub")
+				client := gh.NewClient(target)
+				auth, err := client.CheckAuth()
+				if err != nil {
+					return fmt.Errorf("GitHub CLI authentication check failed: %w\nRun 'gh auth login' to authenticate", err)
+				}
+				repo, repoErr := client.GetRepository()
+				if repoErr == nil && repo != "" {
+					fmt.Printf("Authenticated as %s on %s. Target repository: %s\n", auth.Account, auth.Host, repo)
+				} else {
+					fmt.Printf("Authenticated as %s on %s.\n", auth.Account, auth.Host)
 				}
 				cfg, err := model.LoadConfig(target)
 				if err != nil {
@@ -137,8 +168,15 @@ func run(args []string) error {
 				bundles := secrets.GenerateSecretTemplates(target, cfg)
 				for name, jsonStr := range bundles {
 					fmt.Printf("Injecting %s into GitHub Secrets...\n", name)
-					if err := crypto.SetGitHubSecretAt(target, name, jsonStr); err != nil {
+					if err := client.SetSecret(name, jsonStr); err != nil {
 						return fmt.Errorf("failed to inject %s: %w", name, err)
+					}
+				}
+				privateKeyPath := filepath.Join(target, ".everup", "signing-private.key")
+				if private, err := os.ReadFile(privateKeyPath); err == nil {
+					fmt.Println("Injecting EVERUP_SIGNING_PRIVATE_KEY into GitHub Secrets...")
+					if err := client.SetSecret("EVERUP_SIGNING_PRIVATE_KEY", strings.TrimSpace(string(private))); err != nil {
+						return fmt.Errorf("failed to inject EVERUP_SIGNING_PRIVATE_KEY: %w", err)
 					}
 				}
 				fmt.Println("All secrets synced to GitHub successfully!")
@@ -166,7 +204,9 @@ func printHelp() {
   generate [project]        Regenerate from everup.json
   doctor [project]          Validate configuration and local dependencies
   gen-keys [project]        Save or restore keys in .everup/ (private key is not printed)
+  gh-status [project]       Check GitHub CLI installation and authentication status
   secrets [project]         Display or package JSON secret bundles for GitHub Secrets
+  secrets sync [project]    Push local/generated secrets to GitHub repository secrets via gh CLI
   crop <image> [output]     Crop an image locally
   gen-assets <image> [out]  Generate Windows icon and installer assets
   reload-scripts [project]  List project scripts and templates
