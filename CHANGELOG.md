@@ -1,5 +1,8 @@
 ## Unreleased
 
+* Support JSON secret bundle architecture for grouped GitHub repository secrets (`EVERUP_COMMON_SECRETS`, `EVERUP_ANDROID_SECRETS`, `EVERUP_WINDOWS_SECRETS`, `EVERUP_MACOS_SECRETS`) with single-secret fallback.
+* Auto-detect Flutter project metadata (App ID, application name, semver, executable name, existing platforms, publisher, and keys) to prefill the initialization wizard.
+* Add `everup secrets` command to display formatted JSON secret templates and package certificate files into base64 JSON blocks.
 * Require SHA-256 for binary updates and reject missing signatures when trusted keys are configured.
 * Bind verified downloads to their release, serialize operations, and recheck cached packages before installation.
 * Cover the complete transfer with timeout and cancellation, retry transient failures, and clean expired cache files.

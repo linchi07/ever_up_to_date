@@ -72,6 +72,7 @@ jobs:
           channel: stable
       - name: Build and sign APK
         env:
+          EVERUP_ANDROID_SECRETS: ${{"{{"}} secrets.EVERUP_ANDROID_SECRETS {{"}}"}}
           ANDROID_KEYSTORE_BASE64: ${{"{{"}} secrets.ANDROID_KEYSTORE_BASE64 {{"}}"}}
           ANDROID_KEYSTORE_PASSWORD: ${{"{{"}} secrets.ANDROID_KEYSTORE_PASSWORD {{"}}"}}
           ANDROID_KEY_ALIAS: ${{"{{"}} secrets.ANDROID_KEY_ALIAS {{"}}"}}
@@ -99,6 +100,7 @@ jobs:
         run: choco install innosetup --no-progress -y
       - name: Build and sign installer
         env:
+          EVERUP_WINDOWS_SECRETS: ${{"{{"}} secrets.EVERUP_WINDOWS_SECRETS {{"}}"}}
           WINDOWS_CERTIFICATE_BASE64: ${{"{{"}} secrets.WINDOWS_CERTIFICATE_BASE64 {{"}}"}}
           WINDOWS_CERTIFICATE_PASSWORD: ${{"{{"}} secrets.WINDOWS_CERTIFICATE_PASSWORD {{"}}"}}
         run: ./scripts/flutter/build_windows.ps1
@@ -123,6 +125,7 @@ jobs:
       - run: brew install create-dmg
       - name: Build, sign and notarize DMG
         env:
+          EVERUP_MACOS_SECRETS: ${{"{{"}} secrets.EVERUP_MACOS_SECRETS {{"}}"}}
           MACOS_CERTIFICATE_BASE64: ${{"{{"}} secrets.MACOS_CERTIFICATE_BASE64 {{"}}"}}
           MACOS_CERTIFICATE_PASSWORD: ${{"{{"}} secrets.MACOS_CERTIFICATE_PASSWORD {{"}}"}}
           MACOS_SIGNING_IDENTITY: ${{"{{"}} secrets.MACOS_SIGNING_IDENTITY {{"}}"}}
@@ -148,10 +151,32 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
+      - name: Resolve S3 credentials
+        env:
+          EVERUP_COMMON_SECRETS: ${{"{{"}} secrets.EVERUP_COMMON_SECRETS {{"}}"}}
+          S3_ACCESS_KEY_ID: ${{"{{"}} secrets.S3_ACCESS_KEY_ID {{"}}"}}
+          S3_SECRET_ACCESS_KEY: ${{"{{"}} secrets.S3_SECRET_ACCESS_KEY {{"}}"}}
+        run: |
+          python3 - << 'PY'
+          import json, os
+          key_id = os.environ.get('S3_ACCESS_KEY_ID', '')
+          secret_key = os.environ.get('S3_SECRET_ACCESS_KEY', '')
+          raw = os.environ.get('EVERUP_COMMON_SECRETS', '').strip()
+          if raw:
+              try:
+                  data = json.loads(raw)
+                  key_id = data.get('s3_access_key_id') or key_id
+                  secret_key = data.get('s3_secret_access_key') or secret_key
+              except Exception:
+                  pass
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"AWS_ACCESS_KEY_ID={key_id}\n")
+              f.write(f"AWS_SECRET_ACCESS_KEY={secret_key}\n")
+          PY
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{"{{"}} secrets.S3_ACCESS_KEY_ID {{"}}"}}
-          aws-secret-access-key: ${{"{{"}} secrets.S3_SECRET_ACCESS_KEY {{"}}"}}
+          aws-access-key-id: ${{"{{"}} env.AWS_ACCESS_KEY_ID {{"}}"}}
+          aws-secret-access-key: ${{"{{"}} env.AWS_SECRET_ACCESS_KEY {{"}}"}}
           aws-region: {{ yaml .S3Region }}
 {{ if or .EnableAndroid .EnableWindows .EnableMacOS }}
       - uses: actions/download-artifact@v4
@@ -160,5 +185,6 @@ jobs:
 {{ end }}
       - name: Sign, upload artifacts and publish manifest
         env:
+          EVERUP_COMMON_SECRETS: ${{"{{"}} secrets.EVERUP_COMMON_SECRETS {{"}}"}}
           PRIVATE_KEY: ${{"{{"}} secrets.EVERUP_SIGNING_PRIVATE_KEY {{"}}"}}
         run: bash scripts/common/publish_release.sh artifacts

@@ -3,9 +3,11 @@ package main
 import (
 	"ever_up_builder/internal/asset"
 	"ever_up_builder/internal/crypto"
+	"ever_up_builder/internal/detector"
 	"ever_up_builder/internal/generator"
 	"ever_up_builder/internal/loader"
 	"ever_up_builder/internal/model"
+	"ever_up_builder/internal/secrets"
 	"ever_up_builder/internal/tui"
 	"fmt"
 	"os"
@@ -87,6 +89,48 @@ func run(args []string) error {
 			return err
 		}
 		catalog.PrintSummary()
+	case "secrets":
+		if len(args) > 1 {
+			switch args[1] {
+			case "pack-android":
+				if len(args) < 6 {
+					return fmt.Errorf("usage: everup secrets pack-android <keystore.jks> <keystore_pass> <key_alias> <key_pass>")
+				}
+				jsonStr, err := secrets.PackAndroidSecrets(args[2], args[3], args[4], args[5])
+				if err != nil {
+					return err
+				}
+				fmt.Println(jsonStr)
+				return nil
+			case "pack-windows":
+				if len(args) < 4 {
+					return fmt.Errorf("usage: everup secrets pack-windows <cert.pfx> <cert_pass>")
+				}
+				jsonStr, err := secrets.PackWindowsSecrets(args[2], args[3])
+				if err != nil {
+					return err
+				}
+				fmt.Println(jsonStr)
+				return nil
+			case "pack-macos":
+				if len(args) < 8 {
+					return fmt.Errorf("usage: everup secrets pack-macos <cert.p12> <cert_pass> <identity> <apple_id> <app_pass> <team_id>")
+				}
+				jsonStr, err := secrets.PackMacOSSecrets(args[2], args[3], args[4], args[5], args[6], args[7])
+				if err != nil {
+					return err
+				}
+				fmt.Println(jsonStr)
+				return nil
+			}
+		}
+		cfg, err := model.LoadConfig(root)
+		if err != nil {
+			cfg = detector.DetectFlutterProject(root)
+		}
+		bundles := secrets.GenerateSecretTemplates(root, cfg)
+		fmt.Print(secrets.FormatSecretsSummary(bundles))
+		return nil
 	case "help", "-h", "--help":
 		printHelp()
 	default:
@@ -101,6 +145,7 @@ func printHelp() {
   generate [project]        Regenerate from everup.json
   doctor [project]          Validate configuration and local dependencies
   gen-keys [project]        Save or restore keys in .everup/ (private key is not printed)
+  secrets [project]         Display or package JSON secret bundles for GitHub Secrets
   crop <image> [output]     Crop an image locally
   gen-assets <image> [out]  Generate Windows icon and installer assets
   reload-scripts [project]  List project scripts and templates

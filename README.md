@@ -45,17 +45,20 @@ go build -o ../bin/everup ./cmd/everup
 
 存储对象前缀 `s3_prefix` 与 `manifest_url` 的公开路径必须映射到同一目录；例如前缀 `updates` 对应 `https://cdn.example.com/updates/appcast.json`。通过 Bucket/CDN 策略提供读权限，上传脚本不会修改对象 ACL。存储后端需要支持条件写入，否则发布会失败并保留现有发现清单。
 
-## 配置 GitHub Secrets
+## 配置 GitHub Secrets（推荐 JSON 密钥组架构）
 
-基础 Secrets：`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`、`EVERUP_SIGNING_PRIVATE_KEY`。签名私钥可通过向导中明确选择的 `gh secret set` 步骤上传，也可在 GitHub 设置中填写 `.everup/signing-private.key` 的内容。
+系统支持将各平台的多项密钥打包为整块 JSON 配置，极大减少在 GitHub 后台手动创建数十个 Secret 的繁琐工作：
 
-默认 `require_platform_signing=true`，还需要为启用的平台配置：
+| Secret 名称 | 包含字段 (JSON) | 对应说明 |
+| --- | --- | --- |
+| `EVERUP_COMMON_SECRETS` | `s3_access_key_id`, `s3_secret_access_key`, `signing_private_key` | S3 凭据与 Ed25519 发布私钥（向导自动填入） |
+| `EVERUP_ANDROID_SECRETS` | `keystore_base64`, `keystore_password`, `key_alias`, `key_password` | Android 签名密钥库与密码 |
+| `EVERUP_WINDOWS_SECRETS` | `certificate_base64`, `certificate_password` | Windows Authenticode 代码签名证书 |
+| `EVERUP_MACOS_SECRETS` | `certificate_base64`, `certificate_password`, `signing_identity`, `apple_id`, `apple_app_password`, `apple_team_id` | macOS Developer ID 证书与公证凭证 |
 
-| 平台 | Secrets |
-| --- | --- |
-| Android | `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD` |
-| Windows | `WINDOWS_CERTIFICATE_BASE64`、`WINDOWS_CERTIFICATE_PASSWORD` |
-| macOS | `MACOS_CERTIFICATE_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY`、`APPLE_ID`、`APPLE_APP_PASSWORD`、`APPLE_TEAM_ID` |
+运行 `everup secrets .` 可直接生成已填充好的 JSON 模板并复制粘贴；也可使用打包命令（如 `everup secrets pack-android <keystore> ...`）自动将证书转为 base64。
+
+> 工作流同时完整向下兼容旧版独立的单项 Secrets（如 `S3_ACCESS_KEY_ID`、`ANDROID_KEYSTORE_BASE64` 等）。若两者同时存在，优先使用 JSON 密钥组。
 
 Android 在构建后使用指定 keystore 重签 APK；Windows 使用 Authenticode 签名安装器；macOS 使用 Developer ID 签名并提交公证。开发环境可在配置中关闭平台代码签名要求；发布安装包仍必须具有 Ed25519 签名。
 

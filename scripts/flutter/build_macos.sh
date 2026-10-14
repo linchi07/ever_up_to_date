@@ -10,6 +10,25 @@ cleanup() {
   rm -rf "$TASK_DIR"
 }
 trap cleanup EXIT
+if [[ -n "${EVERUP_MACOS_SECRETS:-}" ]]; then
+  eval "$(python3 -c '
+import json, os, shlex
+try:
+    d = json.loads(os.environ["EVERUP_MACOS_SECRETS"])
+    for k, v in [
+        ("MACOS_CERTIFICATE_BASE64", d.get("certificate_base64")),
+        ("MACOS_CERTIFICATE_PASSWORD", d.get("certificate_password")),
+        ("MACOS_SIGNING_IDENTITY", d.get("signing_identity")),
+        ("APPLE_ID", d.get("apple_id")),
+        ("APPLE_APP_PASSWORD", d.get("apple_app_password")),
+        ("APPLE_TEAM_ID", d.get("apple_team_id")),
+    ]:
+        if v:
+            print(f"export {k}={shlex.quote(str(v))}")
+except Exception:
+    pass
+')"
+fi
 if [[ "${REQUIRE_PLATFORM_SIGNING:-false}" == true && -z "${MACOS_CERTIFICATE_BASE64:-}" ]]; then
   echo 'macOS Developer ID certificate is required' >&2; exit 1
 fi

@@ -6,6 +6,13 @@ param(
 $ErrorActionPreference = "Stop"
 if (-not $BuildName -or -not $BuildNumber) { throw "BUILD_NAME and BUILD_NUMBER are required" }
 if (-not (Test-Path -LiteralPath $InnoScript)) { throw "Missing installer script: $InnoScript; run everup generate" }
+if ($env:EVERUP_WINDOWS_SECRETS) {
+    try {
+        $sec = $env:EVERUP_WINDOWS_SECRETS | ConvertFrom-Json
+        if ($sec.certificate_base64) { $env:WINDOWS_CERTIFICATE_BASE64 = $sec.certificate_base64 }
+        if ($sec.certificate_password) { $env:WINDOWS_CERTIFICATE_PASSWORD = $sec.certificate_password }
+    } catch {}
+}
 if ($env:REQUIRE_PLATFORM_SIGNING -eq "true" -and -not $env:WINDOWS_CERTIFICATE_BASE64) { throw "Windows signing certificate is required" }
 flutter pub get
 if ($LASTEXITCODE -ne 0) { throw "flutter pub get failed" }

@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -n "${EVERUP_COMMON_SECRETS:-}" ]]; then
+  eval "$(python3 -c '
+import json, os, shlex
+try:
+    d = json.loads(os.environ["EVERUP_COMMON_SECRETS"])
+    for k, v in [
+        ("AWS_ACCESS_KEY_ID", d.get("s3_access_key_id")),
+        ("AWS_SECRET_ACCESS_KEY", d.get("s3_secret_access_key")),
+        ("PRIVATE_KEY", d.get("signing_private_key")),
+    ]:
+        if v:
+            print(f"export {k}={shlex.quote(str(v))}")
+except Exception:
+    pass
+')"
+fi
+
 : "${S3_BUCKET:?S3_BUCKET is required}"
 : "${MANIFEST_URL:?MANIFEST_URL is required}"
 : "${BUILD_NAME:?BUILD_NAME is required}"

@@ -2,6 +2,23 @@
 set -euo pipefail
 : "${BUILD_NAME:?BUILD_NAME is required}"
 : "${BUILD_NUMBER:?BUILD_NUMBER is required}"
+if [[ -n "${EVERUP_ANDROID_SECRETS:-}" ]]; then
+  eval "$(python3 -c '
+import json, os, shlex
+try:
+    d = json.loads(os.environ["EVERUP_ANDROID_SECRETS"])
+    for k, v in [
+        ("ANDROID_KEYSTORE_BASE64", d.get("keystore_base64")),
+        ("ANDROID_KEYSTORE_PASSWORD", d.get("keystore_password")),
+        ("ANDROID_KEY_ALIAS", d.get("key_alias")),
+        ("ANDROID_KEY_PASSWORD", d.get("key_password")),
+    ]:
+        if v:
+            print(f"export {k}={shlex.quote(str(v))}")
+except Exception:
+    pass
+')"
+fi
 if [[ "${REQUIRE_PLATFORM_SIGNING:-false}" == true && -z "${ANDROID_KEYSTORE_BASE64:-}" ]]; then
   echo 'Android release keystore is required' >&2; exit 1
 fi

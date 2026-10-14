@@ -55,3 +55,10 @@ func TestCommandFailuresReturnErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestSecretsCommand(t *testing.T) {
+	root := t.TempDir()
+	if err := run([]string{"secrets", root}); err != nil {
+		t.Fatalf("secrets failed: %v", err)
+	}
+}
