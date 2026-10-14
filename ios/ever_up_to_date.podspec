@@ -5,13 +5,13 @@
 Pod::Spec.new do |s|
   s.name             = 'ever_up_to_date'
   s.version          = '0.0.1'
-  s.summary          = 'A new Flutter plugin project.'
+  s.summary          = 'Headless Flutter app updates with verified downloads.'
   s.description      = <<-DESC
-A new Flutter plugin project.
+Headless Flutter app updates with verified downloads.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/linchi07/ever_up_to_date'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = 'EverUp contributors'
   s.source           = { :path => '.' }
   s.source_files = 'ever_up_to_date/Sources/ever_up_to_date/**/*'
   s.dependency 'Flutter'

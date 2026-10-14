@@ -28,8 +28,9 @@ class PlatformTarget {
         json['signature_ed25519'] as String? ?? json['signature'] as String?;
     final fileSize = json['file_size'] as int? ?? json['size'] as int?;
     final argsRaw = json['installer_args'];
-    final installerArgs =
-        argsRaw is List ? argsRaw.map((e) => e.toString()).toList() : null;
+    final installerArgs = argsRaw is List
+        ? argsRaw.map((e) => e.toString()).toList()
+        : null;
 
     return PlatformTarget(
       type: PackageType.fromString(typeStr),
@@ -44,13 +45,13 @@ class PlatformTarget {
 
   Map<String, dynamic> toJson() {
     return {
-      'type': type.name,
+      ...extra,
+      'type': type.key,
       'url': url,
       if (sha256 != null) 'sha256': sha256,
       if (signatureEd25519 != null) 'signature_ed25519': signatureEd25519,
       if (fileSize != null) 'file_size': fileSize,
       if (installerArgs != null) 'installer_args': installerArgs,
-      ...extra,
     };
   }
 }

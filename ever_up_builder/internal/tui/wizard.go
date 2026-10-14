@@ -4,115 +4,76 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"strings"
 
 	"ever_up_builder/internal/crypto"
 	"ever_up_builder/internal/generator"
-	"ever_up_builder/internal/loader"
 	"ever_up_builder/internal/model"
+	"github.com/charmbracelet/huh"
 )
 
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#6366f1")).
-			MarginBottom(1)
-
-	successStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#22c55e"))
-
-	mutedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#94a3b8"))
-)
-
-// RunInitWizard launches the interactive terminal wizard for EverUp.
-func RunInitWizard(rootDir string) error {
-	fmt.Println(titleStyle.Render("🚀 EverUp Builder — 跨平台流水线与发布脚手架"))
-	fmt.Println(mutedStyle.Render("正在扫描本地脚本与模板目录...\n"))
-
-	catalog, err := loader.LoadCatalog(rootDir)
-	if err == nil {
-		catalog.PrintSummary()
-		fmt.Println()
+func RunInitWizard(root string) error {
+	if _, err := os.Stat(filepath.Join(root, "pubspec.yaml")); err != nil {
+		return fmt.Errorf("target must be a Flutter project: %w", err)
 	}
-
-	cfg := model.ProjectConfig{
-		AppName:        "EverUpApp",
-		AppID:          "com.example.everup",
-		Version:        "1.0.0",
-		Publisher:      "EverUp Team",
-		ExecutableName: "app.exe",
-		S3Bucket:       "my-updates-bucket",
-		ManifestURL:    "https://my-bucket.s3.amazonaws.com/appcast.json",
+	cfg, err := model.LoadConfig(root)
+	if err != nil && !os.IsNotExist(err) {
+		return err
 	}
-
-	var selectedPlatforms []string
-	autoGenKeys := true
-	autoInjectGhSecret := true
-
+	if os.IsNotExist(err) {
+		cfg = model.DefaultConfig()
+		cfg.EnableAndroid, cfg.EnableWindows, cfg.EnableMacOS = true, true, true
+		data, err := os.ReadFile(filepath.Join(root, "pubspec.yaml"))
+		if err != nil {
+			return err
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "name:") {
+				name := strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+				cfg.AppName, cfg.ExecutableName = name, name+".exe"
+				break
+			}
+		}
+	}
+	var platforms []string
+	generateKeys := cfg.PublicKeyEd25519 == ""
+	injectSecret := false
+	fmt.Println("EverUp Builder — 配置跨平台发布")
 	form := huh.NewForm(
 		huh.NewGroup(
-			huh.NewInput().
-				Title("应用名称 (App Name)").
-				Value(&cfg.AppName),
-
-			huh.NewInput().
-				Title("应用唯一标识 (App ID / Bundle ID)").
-				Value(&cfg.AppID),
-
-			huh.NewInput().
-				Title("开发者 / 发布者名称 (Publisher)").
-				Value(&cfg.Publisher),
+			huh.NewInput().Title("应用名称").Value(&cfg.AppName),
+			huh.NewInput().Title("App ID / Bundle ID").Value(&cfg.AppID),
+			huh.NewInput().Title("发布者").Value(&cfg.Publisher),
+			huh.NewInput().Title("Windows 可执行文件名").Value(&cfg.ExecutableName),
 		),
-
+		huh.NewGroup(huh.NewMultiSelect[string]().Title("目标平台").Options(
+			huh.NewOption("Android APK", "android").Selected(cfg.EnableAndroid),
+			huh.NewOption("Windows Inno Setup", "windows").Selected(cfg.EnableWindows),
+			huh.NewOption("macOS DMG", "macos").Selected(cfg.EnableMacOS),
+			huh.NewOption("iOS 商店导流", "ios").Selected(cfg.EnableIOS),
+		).Value(&platforms)),
 		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("选择构建目标平台 (Target Platforms)").
-				Options(
-					huh.NewOption("Android (APK 直装)", "android").Selected(true),
-					huh.NewOption("Windows (Inno Setup 现代静默安装)", "windows").Selected(true),
-					huh.NewOption("macOS (DMG 镜像打包)", "macos").Selected(true),
-					huh.NewOption("iOS (TestFlight / App Store 导流)", "ios"),
-				).
-				Value(&selectedPlatforms),
+			huh.NewInput().Title("S3 Bucket").Value(&cfg.S3Bucket),
+			huh.NewInput().Title("S3 Endpoint（可选）").Value(&cfg.S3Endpoint),
+			huh.NewInput().Title("S3 Region").Value(&cfg.S3Region),
+			huh.NewInput().Title("S3 对象前缀（可选）").Value(&cfg.S3Prefix),
+			huh.NewInput().Title("Manifest URL（以 /appcast.json 结尾）").Value(&cfg.ManifestURL),
+			huh.NewInput().Title("iOS 商店 / TestFlight 地址（启用 iOS 时必填）").Value(&cfg.IOSStoreURL),
 		),
-
 		huh.NewGroup(
-			huh.NewInput().
-				Title("S3 兼容存储桶名称 (Bucket Name)").
-				Value(&cfg.S3Bucket),
-
-			huh.NewInput().
-				Title("S3 自定义 Endpoint (可选，如 Cloudflare R2 / 阿里云 OSS)").
-				Value(&cfg.S3Endpoint),
-
-			huh.NewInput().
-				Title("静态 Appcast Manifest 线上访问地址").
-				Value(&cfg.ManifestURL),
-		),
-
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("是否自动生成 Ed25519 签名密钥对？").
-				Description("用于防止安装包被恶意篡改，客户端将严格验证此数字签名。").
-				Value(&autoGenKeys),
-
-			huh.NewConfirm().
-				Title("是否使用 gh CLI 自动将私钥注入到 GitHub Secrets？").
-				Description("自动执行 `gh secret set EVERUP_SIGNING_PRIVATE_KEY`").
-				Value(&autoInjectGhSecret),
+			huh.NewSelect[int]().Title("灰度发布比例").Options(huh.NewOption("全部设备 (100%)", 100), huh.NewOption("50%", 50), huh.NewOption("25%", 25), huh.NewOption("10%", 10), huh.NewOption("暂停分发 (0%)", 0)).Value(&cfg.RolloutPercentage),
+			huh.NewConfirm().Title("发布时要求平台代码签名？").Value(&cfg.RequirePlatformSigning),
+			huh.NewConfirm().Title("生成或恢复本地 Ed25519 密钥？").Description("已保存的私钥会保留；不会在终端输出私钥。").Value(&generateKeys),
+			huh.NewInput().Title("Ed25519 公钥（使用已有密钥时填写）").Value(&cfg.PublicKeyEd25519),
+			huh.NewConfirm().Title("使用 gh CLI 将已保存的私钥注入 GitHub Secrets？").Value(&injectSecret),
 		),
 	)
-
 	if err := form.Run(); err != nil {
 		return fmt.Errorf("wizard cancelled: %w", err)
 	}
-
-	for _, p := range selectedPlatforms {
-		switch p {
+	cfg.EnableAndroid, cfg.EnableWindows, cfg.EnableMacOS, cfg.EnableIOS = false, false, false, false
+	for _, platform := range platforms {
+		switch platform {
 		case "android":
 			cfg.EnableAndroid = true
 		case "windows":
@@ -123,87 +84,29 @@ func RunInitWizard(rootDir string) error {
 			cfg.EnableIOS = true
 		}
 	}
-
-	fmt.Println("\n==> 正在生成配置与脚本...")
-
-	if autoGenKeys {
-		kp, err := crypto.GenerateEd25519KeyPair()
+	if generateKeys {
+		kp, err := crypto.EnsureKeyPair(root)
 		if err != nil {
-			fmt.Printf("⚠️ 生成密钥对失败: %v\n", err)
-		} else {
-			cfg.PublicKeyEd25519 = kp.PublicKey
-			cfg.PrivateKeyEd25519 = kp.PrivateKey
-			fmt.Printf("✓ 已生成 Ed25519 公钥: %s\n", kp.PublicKey)
-
-			if autoInjectGhSecret && crypto.IsGhAvailable() {
-				if err := crypto.SetGitHubSecret("EVERUP_SIGNING_PRIVATE_KEY", kp.PrivateKey); err != nil {
-					fmt.Printf("⚠️ 注入 GitHub Secret 失败: %v\n", err)
-				} else {
-					fmt.Println("✓ 已通过 gh CLI 成功注入 GitHub Secret: EVERUP_SIGNING_PRIVATE_KEY")
-				}
-			}
+			return err
+		}
+		cfg.PublicKeyEd25519 = kp.PublicKey
+		fmt.Printf("公钥: %s\n私钥已保存至 .everup/signing-private.key，请安全备份。\n", kp.PublicKey)
+	}
+	if err := generator.GenerateProject(root, cfg); err != nil {
+		return err
+	}
+	if injectSecret {
+		if !crypto.IsGhAvailable() {
+			return fmt.Errorf("gh CLI is required for secret injection; local configuration was saved")
+		}
+		private, err := os.ReadFile(filepath.Join(root, ".everup", "signing-private.key"))
+		if err != nil {
+			return err
+		}
+		if err := crypto.SetGitHubSecretAt(root, "EVERUP_SIGNING_PRIVATE_KEY", strings.TrimSpace(string(private))); err != nil {
+			return err
 		}
 	}
-
-	tmplCtx := model.TemplateContext{
-		AppName:        cfg.AppName,
-		AppID:          cfg.AppID,
-		Version:        cfg.Version,
-		Publisher:      cfg.Publisher,
-		ExecutableName: cfg.ExecutableName,
-		SourceDir:      `build\windows\runner\Release`,
-		IconPath:       `windows\runner\resources\app_icon.ico`,
-		EnableAndroid:  cfg.EnableAndroid,
-		EnableWindows:  cfg.EnableWindows,
-		EnableMacOS:    cfg.EnableMacOS,
-		EnableIOS:      cfg.EnableIOS,
-		S3Bucket:       cfg.S3Bucket,
-		S3Endpoint:     cfg.S3Endpoint,
-	}
-
-	// 1. Generate GitHub Actions workflow
-	if err := generator.GenerateGitHubWorkflow(rootDir, tmplCtx); err != nil {
-		fmt.Printf("⚠️ 生成 GitHub Actions 失败: %v\n", err)
-	} else {
-		fmt.Println("✓ 已生成流水线: .github/workflows/everup_release.yml")
-	}
-
-	// 2. Generate Inno Setup script if Windows enabled
-	if cfg.EnableWindows {
-		if err := generator.GenerateInnoScript(rootDir, tmplCtx); err != nil {
-			fmt.Printf("⚠️ 生成 Inno Setup 脚本失败: %v\n", err)
-		} else {
-			fmt.Println("✓ 已生成安装器脚本: build/windows/installer.iss")
-		}
-	}
-
-	// 3. Generate initial appcast.json if missing
-	appcastPath := filepath.Join(rootDir, "appcast.json")
-	if _, err := os.Stat(appcastPath); os.IsNotExist(err) {
-		initialJSON := fmt.Sprintf(`{
-  "version": 1,
-  "app_id": "%s",
-  "channels": {
-    "beta": {
-      "version": "1.0.0",
-      "build_number": 1,
-      "mandatory": false,
-      "pub_date": "2026-10-14T12:00:00Z",
-      "release_notes": {
-        "zh-CN": "1. 初始构建版本发布",
-        "en-US": "1. Initial build release"
-      },
-      "platforms": {}
-    }
-  }
-}
-`, cfg.AppID)
-		_ = os.WriteFile(appcastPath, []byte(initialJSON), 0644)
-		fmt.Println("✓ 已生成初始 Appcast: appcast.json")
-	}
-
-	fmt.Println("\n" + successStyle.Render("🎉 EverUp 配置初始化完成！"))
-	fmt.Println(mutedStyle.Render("你现在可以使用 `git push` 推送代码到 GitHub 触发自动化构建！"))
-
+	fmt.Println("配置和发布文件已生成。请检查 everup.json、配置 GitHub Secrets，然后推送 v<版本> 标签或手动运行发布工作流。")
 	return nil
 }

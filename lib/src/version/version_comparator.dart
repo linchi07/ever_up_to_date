@@ -52,6 +52,12 @@ class _ParsedVersion {
 
   static _ParsedVersion parse(String versionString) {
     var raw = versionString.trim();
+    if (raw.startsWith('v')) raw = raw.substring(1);
+    if (!RegExp(
+      r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$',
+    ).hasMatch(raw)) {
+      throw FormatException('Invalid semantic version', versionString);
+    }
     String? metadata;
     String? pre;
 
@@ -66,6 +72,12 @@ class _ParsedVersion {
     final dashIndex = raw.indexOf('-');
     if (dashIndex != -1) {
       pre = raw.substring(dashIndex + 1);
+      if (pre.split('.').any((part) => RegExp(r'^0\d+$').hasMatch(part))) {
+        throw FormatException(
+          'Numeric prerelease identifiers cannot have leading zeros',
+          versionString,
+        );
+      }
       raw = raw.substring(0, dashIndex);
     }
 
@@ -115,7 +127,9 @@ class _ParsedVersion {
     // Both have pre-release tags, compare segment by segment
     final parts1 = preRelease!.split('.');
     final parts2 = other.preRelease!.split('.');
-    final maxLen = parts1.length > parts2.length ? parts1.length : parts2.length;
+    final maxLen = parts1.length > parts2.length
+        ? parts1.length
+        : parts2.length;
 
     for (var i = 0; i < maxLen; i++) {
       if (i >= parts1.length) return -1;

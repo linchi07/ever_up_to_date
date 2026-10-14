@@ -1,17 +1,19 @@
-# ever_up_to_date_example
+# EverUp Flutter 示例
 
-Demonstrates how to use the ever_up_to_date plugin.
+示例展示 SDK 状态和更新按钮。`demo_appcast.json` 仅供清单结构演示，安装包和商店链接是占位地址，不能用于真实升级。
 
-## Getting Started
+运行自己的分发：
 
-This project is a starting point for a Flutter application.
+```bash
+flutter run --dart-define=EVERUP_MANIFEST_URL=https://updates.example.com/appcast.json \
+  --dart-define=EVERUP_PUBLIC_KEY=YOUR_BASE64_PUBLIC_KEY
+```
 
-A few resources to get you started if this is your first Flutter project:
+真实验收需要先发布一个更高版本/构建号的安装包。Android 安装需要未知应用权限，Windows 启动安装器后默认退出，macOS 需要完成系统安装。用 `confirmInstalledUpdate()` 在下一次启动确认新版本。
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter test test/widget_test.dart
+flutter test integration_test/plugin_integration_test.dart -d macos
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+集成测试使用本地 HTTP 服务和测试签名，验证检查、下载、验签、安装交接与重启后的版本确认；不自动操作系统安装弹窗。

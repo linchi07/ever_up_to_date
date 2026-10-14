@@ -21,15 +21,14 @@ if [ -z "${S3_BUCKET:-}" ]; then
   exit 1
 fi
 
-ENDPOINT_ARG=""
+ENDPOINT_ARGS=()
 if [ -n "${S3_ENDPOINT_URL:-}" ]; then
-  ENDPOINT_ARG="--endpoint-url=$S3_ENDPOINT_URL"
+  ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT_URL")
 fi
 
 DEST_URI="s3://${S3_BUCKET}/${REMOTE_PATH}"
 
 echo "==> Uploading $LOCAL_FILE to $DEST_URI ..."
-aws s3 cp "$LOCAL_FILE" "$DEST_URI" $ENDPOINT_ARG --acl public-read || \
-aws s3 cp "$LOCAL_FILE" "$DEST_URI" $ENDPOINT_ARG
+aws s3 cp "$LOCAL_FILE" "$DEST_URI" "${ENDPOINT_ARGS[@]}"
 
 echo "==> Upload completed: $DEST_URI"

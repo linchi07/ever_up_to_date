@@ -12,6 +12,18 @@ enum PackageType {
   appImage,
   custom;
 
+  /// Canonical JSON protocol spelling.
+  String get key => switch (this) {
+    directApk => 'direct_apk',
+    googlePlay => 'google_play',
+    innoSetup => 'inno_setup',
+    genericInstaller => 'generic_installer',
+    portableArchive => 'portable_archive',
+    appStore => 'app_store',
+    appImage => 'app_image',
+    _ => name,
+  };
+
   static PackageType fromString(String name) {
     switch (name.toLowerCase()) {
       case 'direct_apk':

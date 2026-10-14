@@ -1,27 +1,10 @@
 #!/usr/bin/env bash
-# Xcode Cloud CI Post-Clone Hook for Flutter
-set -e
-
-# Fail this script if any subcommand fails.
-set -o pipefail
-
-echo "==> Xcode Cloud: Installing Homebrew and dependencies..."
-export HOMEBREW_NO_INSTALL_CLEANUP=TRUE
-brew install --cask flutter
-brew install cocoapods
-
-echo "==> Flutter Doctor check..."
-flutter doctor -v
-
-echo "==> Pre-caching Flutter iOS artifacts..."
+set -euo pipefail
+: "${CI_PRIMARY_REPOSITORY_PATH:?Xcode Cloud repository path is required}"
+cd "$CI_PRIMARY_REPOSITORY_PATH"
+if ! command -v flutter >/dev/null; then brew install --cask flutter; fi
+if ! command -v pod >/dev/null; then brew install cocoapods; fi
 flutter precache --ios
-
-echo "==> Getting Flutter dependencies..."
 flutter pub get
-
-# Navigate to iOS directory and run pod install
 cd ios
 pod install
-
-echo "==> Xcode Cloud Post-Clone setup completed successfully."
-exit 0

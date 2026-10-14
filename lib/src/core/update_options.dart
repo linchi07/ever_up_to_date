@@ -13,6 +13,29 @@ class UpdateOptions {
   /// Optional Ed25519 public key (Base64 or Hex) for verifying package signatures.
   final String? publicKeyEd25519;
 
+  /// Additional trusted keys during an explicitly managed key rotation.
+  final List<String> trustedPublicKeysEd25519;
+
+  /// Require SHA-256 on binary distributions, including unsigned development builds.
+  final bool requireChecksum;
+  final String? expectedAppId;
+
+  /// Dotted OS release version. Required when a release specifies min_os_version.
+  final String? currentOsVersion;
+
+  /// Optional architecture override ('x64', 'arm64', 'arm', 'ia32').
+  final String? architecture;
+
+  /// Stable pseudonymous cohort ID. By default a random installation ID is persisted locally.
+  final String? rolloutIdentifier;
+  final int maxDownloadRetries;
+  final Duration cacheMaxAge;
+
+  /// Local portable installation settings; never taken from the remote manifest.
+  final String? portableInstallDirectory;
+  final String? portableExecutableName;
+  final String? appImagePath;
+
   /// Override the current application version (defaults to PackageInfo version).
   final String? currentVersion;
 
@@ -41,6 +64,17 @@ class UpdateOptions {
     required this.manifestUrl,
     this.channel = DEFAULT_CHANNEL,
     this.publicKeyEd25519,
+    this.trustedPublicKeysEd25519 = const [],
+    this.requireChecksum = true,
+    this.expectedAppId,
+    this.currentOsVersion,
+    this.architecture,
+    this.rolloutIdentifier,
+    this.maxDownloadRetries = 2,
+    this.cacheMaxAge = const Duration(days: 7),
+    this.portableInstallDirectory,
+    this.portableExecutableName,
+    this.appImagePath,
     this.currentVersion,
     this.currentBuildNumber,
     this.preferredLocale,

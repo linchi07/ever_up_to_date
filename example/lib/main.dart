@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:ever_up_to_date/ever_up_to_date.dart';
 
 void main() {
@@ -29,8 +30,11 @@ class UpdateDemoPage extends StatefulWidget {
 }
 
 class _UpdateDemoPageState extends State<UpdateDemoPage> {
-  static const String DEMO_MANIFEST_URL =
-      'https://raw.githubusercontent.com/linchi07/ever_up_to_date/main/example/demo_appcast.json';
+  static const String DEMO_MANIFEST_URL = String.fromEnvironment(
+    'EVERUP_MANIFEST_URL',
+    defaultValue:
+        'https://raw.githubusercontent.com/linchi07/ever_up_to_date/main/example/demo_appcast.json',
+  );
 
   @override
   void initState() {
@@ -44,6 +48,9 @@ class _UpdateDemoPageState extends State<UpdateDemoPage> {
         manifestUrl: DEMO_MANIFEST_URL,
         channel: 'beta',
         preferredLocale: 'zh-CN',
+        publicKeyEd25519: bool.hasEnvironment('EVERUP_PUBLIC_KEY')
+            ? String.fromEnvironment('EVERUP_PUBLIC_KEY')
+            : null,
       ),
     );
   }
@@ -58,10 +65,13 @@ class _UpdateDemoPageState extends State<UpdateDemoPage> {
 
   Future<void> _installUpdate() async {
     // Check permission on Android if needed
-    final canInstall = await EverUpToDate.instance.canRequestPackageInstalls();
-    if (!canInstall) {
-      await EverUpToDate.instance.openInstallPermissionSettings();
-      return;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final canInstall = await EverUpToDate.instance
+          .canRequestPackageInstalls();
+      if (!canInstall) {
+        await EverUpToDate.instance.openInstallPermissionSettings();
+        return;
+      }
     }
 
     await EverUpToDate.instance.installUpdate();
@@ -70,9 +80,7 @@ class _UpdateDemoPageState extends State<UpdateDemoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('EverUpToDate Auto-Update Demo'),
-      ),
+      appBar: AppBar(title: const Text('EverUpToDate Auto-Update Demo')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -129,7 +137,13 @@ class _UpdateDemoPageState extends State<UpdateDemoPage> {
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _checkUpdate,
+                    onPressed:
+                        state is UpdateCheckingState ||
+                            state is UpdateDownloadingState ||
+                            state is UpdateVerifyingState ||
+                            state is UpdateInstallingState
+                        ? null
+                        : _checkUpdate,
                     child: const Text('检查更新 (Check For Updates)'),
                   ),
                 ],
@@ -143,6 +157,8 @@ class _UpdateDemoPageState extends State<UpdateDemoPage> {
 
   String _describeState(UpdateState state) {
     if (state is UpdateIdleState) return '空闲 (Idle)';
+    if (state is UpdateDeferredState) return '暂缓更新: ${state.reason}';
+    if (state is UpdateInstalledState) return '已确认运行新版本: ${state.version}';
     if (state is UpdateCheckingState) return '正在检查新版本...';
     if (state is UpdateUpToDateState) return '已是最新版本 (Up to date)';
     if (state is UpdateAvailableState) return '有新版本可用';

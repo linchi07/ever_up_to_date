@@ -70,15 +70,13 @@ class EverUpToDate {
   /// On Android, launches the system package installer.
   /// On Windows, executes the installer and optionally terminates the current process.
   /// On iOS/Store, opens TestFlight or App Store URL.
-  Future<bool> installUpdate({
-    List<String>? customArgs,
-    bool? autoExit,
-  }) {
-    return _engine.installUpdate(
-      customArgs: customArgs,
-      autoExit: autoExit,
-    );
+  Future<bool> installUpdate({List<String>? customArgs, bool? autoExit}) {
+    return _engine.installUpdate(customArgs: customArgs, autoExit: autoExit);
   }
+
+  /// Confirm a previously launched update using the version running after restart.
+  Future<UpdateInstallationResult?> confirmInstalledUpdate() =>
+      _engine.confirmInstalledUpdate();
 
   /// Checks if the application currently has permission to install unknown apps on Android.
   Future<bool> canRequestPackageInstalls() {

@@ -7,6 +7,14 @@ import 'package:cryptography/cryptography.dart';
 class SignatureVerifier {
   static final Ed25519 ED25519_ALGORITHM = Ed25519();
 
+  static bool isValidPublicKey(String value) {
+    try {
+      return _decodeString(value.trim()).length == 32;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Verifies [dataBytes] with [signatureString] and [publicKeyString].
   ///
   /// Supports Base64 or Hex encoded signatures and public keys.
@@ -18,21 +26,16 @@ class SignatureVerifier {
     try {
       final sigBytes = _decodeString(signatureString.trim());
       final keyBytes = _decodeString(publicKeyString.trim());
+      if (sigBytes.length != 64 || keyBytes.length != 32) return false;
 
       final simplePublicKey = SimplePublicKey(
         keyBytes,
         type: KeyPairType.ed25519,
       );
 
-      final signature = Signature(
-        sigBytes,
-        publicKey: simplePublicKey,
-      );
+      final signature = Signature(sigBytes, publicKey: simplePublicKey);
 
-      return await ED25519_ALGORITHM.verify(
-        dataBytes,
-        signature: signature,
-      );
+      return await ED25519_ALGORITHM.verify(dataBytes, signature: signature);
     } catch (_) {
       return false;
     }

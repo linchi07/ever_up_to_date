@@ -35,3 +35,5 @@ migrate_working_dir/
 **/GeneratedPluginRegistrant.*
 **/generated_plugins.cmake
 /bin/
+
+/.everup/

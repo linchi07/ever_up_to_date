@@ -10,6 +10,9 @@ class ChannelInfo {
   final DateTime? pubDate;
   final Map<String, String> releaseNotes;
   final Map<TargetPlatformType, PlatformTarget> platforms;
+  final double rolloutPercentage;
+  final String? rolloutSeed;
+  final bool withdrawn;
 
   const ChannelInfo({
     required this.version,
@@ -19,6 +22,9 @@ class ChannelInfo {
     this.pubDate,
     this.releaseNotes = const {},
     this.platforms = const {},
+    this.rolloutPercentage = 100,
+    this.rolloutSeed,
+    this.withdrawn = false,
   });
 
   factory ChannelInfo.fromJson(Map<String, dynamic> json) {
@@ -29,6 +35,15 @@ class ChannelInfo {
     final mandatory = json['mandatory'] as bool? ?? false;
     final pubDateStr = json['pub_date'] as String?;
     final pubDate = pubDateStr != null ? DateTime.tryParse(pubDateStr) : null;
+    final rolloutPercentage =
+        (json['rollout_percentage'] as num?)?.toDouble() ?? 100;
+    if (!rolloutPercentage.isFinite ||
+        rolloutPercentage < 0 ||
+        rolloutPercentage > 100) {
+      throw const FormatException(
+        'rollout_percentage must be between 0 and 100',
+      );
+    }
 
     final releaseNotes = <String, String>{};
     final rawNotes = json['release_notes'];
@@ -59,6 +74,9 @@ class ChannelInfo {
       pubDate: pubDate,
       releaseNotes: releaseNotes,
       platforms: platforms,
+      rolloutPercentage: rolloutPercentage,
+      rolloutSeed: json['rollout_seed'] as String?,
+      withdrawn: json['withdrawn'] as bool? ?? false,
     );
   }
 
@@ -83,7 +101,18 @@ class ChannelInfo {
   }
 
   /// Gets the platform target definition for [platformType].
-  PlatformTarget? getTarget(TargetPlatformType platformType) {
-    return platforms[platformType];
+  PlatformTarget? getTarget(
+    TargetPlatformType platformType, [
+    String? architecture,
+  ]) {
+    final target = platforms[platformType];
+    final variants = target?.extra['architectures'];
+    if (variants is Map) {
+      final variant = variants[architecture];
+      return variant is Map<String, dynamic>
+          ? PlatformTarget.fromJson(variant)
+          : null;
+    }
+    return target;
   }
 }

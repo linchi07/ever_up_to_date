@@ -2,147 +2,163 @@ name: EverUp Release Pipeline
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
     inputs:
-      channel:
-        description: 'Release Channel (stable, beta)'
+      version:
+        description: 'Semantic version (required when running on a branch)'
         required: true
-        default: 'beta'
+      build_number:
+        description: 'Positive build number; defaults to workflow run number'
+        required: false
+      channel:
+        description: 'Release channel'
+        type: choice
+        options: [stable, beta]
+        default: beta
+
+permissions:
+  contents: read
+concurrency:
+  group: everup-publish
+  cancel-in-progress: false
+
+env:
+  APP_ID: {{ yaml .AppID }}
+  S3_BUCKET: {{ yaml .S3Bucket }}
+  S3_ENDPOINT_URL: {{ yaml .S3Endpoint }}
+  S3_PREFIX: {{ yaml .S3Prefix }}
+  MANIFEST_URL: {{ yaml .ManifestURL }}
+  ROLLOUT_PERCENTAGE: '{{ .RolloutPercentage }}'
+  ENABLE_ANDROID: '{{ .EnableAndroid }}'
+  ENABLE_WINDOWS: '{{ .EnableWindows }}'
+  ENABLE_MACOS: '{{ .EnableMacOS }}'
+  ENABLE_IOS: '{{ .EnableIOS }}'
+  IOS_STORE_URL: {{ yaml .IOSStoreURL }}
+  IOS_PACKAGE_TYPE: {{ yaml .IOSPackageType }}
+  REQUIRE_PLATFORM_SIGNING: '{{ .RequirePlatformSigning }}'
 
 jobs:
-{{- if .EnableAndroid }}
-  build-android:
-    name: Build Android APK
+  metadata:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{"{{"}} steps.release.outputs.version {{"}}"}}
+      build_number: ${{"{{"}} steps.release.outputs.build_number {{"}}"}}
+      channel: ${{"{{"}} steps.release.outputs.channel {{"}}"}}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - id: release
+        env:
+          INPUT_VERSION: ${{"{{"}} inputs.version {{"}}"}}
+          INPUT_BUILD_NUMBER: ${{"{{"}} inputs.build_number {{"}}"}}
+          INPUT_CHANNEL: ${{"{{"}} inputs.channel {{"}}"}}
+          RELEASE_TAG: ${{"{{"}} github.ref_name {{"}}"}}
+        run: bash scripts/common/release_metadata.sh
+{{ if .EnableAndroid }}
+  build-android:
+    needs: metadata
+    runs-on: ubuntu-latest
+    env:
+      BUILD_NAME: ${{"{{"}} needs.metadata.outputs.version {{"}}"}}
+      BUILD_NUMBER: ${{"{{"}} needs.metadata.outputs.build_number {{"}}"}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-
-      - name: Build APK
-        run: |
-          chmod +x scripts/flutter/build_android.sh
-          ./scripts/flutter/build_android.sh
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+          channel: stable
+      - name: Build and sign APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{"{{"}} secrets.ANDROID_KEYSTORE_BASE64 {{"}}"}}
+          ANDROID_KEYSTORE_PASSWORD: ${{"{{"}} secrets.ANDROID_KEYSTORE_PASSWORD {{"}}"}}
+          ANDROID_KEY_ALIAS: ${{"{{"}} secrets.ANDROID_KEY_ALIAS {{"}}"}}
+          ANDROID_KEY_PASSWORD: ${{"{{"}} secrets.ANDROID_KEY_PASSWORD {{"}}"}}
+        run: bash scripts/flutter/build_android.sh
+      - uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-{{- end }}
-
-{{- if .EnableWindows }}
+          if-no-files-found: error
+{{ end }}
+{{ if .EnableWindows }}
   build-windows:
-    name: Build Windows Installer
+    needs: metadata
     runs-on: windows-latest
+    env:
+      BUILD_NAME: ${{"{{"}} needs.metadata.outputs.version {{"}}"}}
+      BUILD_NUMBER: ${{"{{"}} needs.metadata.outputs.build_number {{"}}"}}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-
-      - name: Setup Inno Setup
-        uses: stack-of-tasks/setup-inno-setup@v1
-
-      - name: Build and Package Windows
-        run: |
-          powershell -ExecutionPolicy Bypass -File scripts/flutter/build_windows.ps1
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+          channel: stable
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build and sign installer
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{"{{"}} secrets.WINDOWS_CERTIFICATE_BASE64 {{"}}"}}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{"{{"}} secrets.WINDOWS_CERTIFICATE_PASSWORD {{"}}"}}
+        run: ./scripts/flutter/build_windows.ps1
+      - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: build/windows/installer/*.exe
-{{- end }}
-
-{{- if .EnableMacOS }}
+          if-no-files-found: error
+{{ end }}
+{{ if .EnableMacOS }}
   build-macos:
-    name: Build macOS DMG
+    needs: metadata
     runs-on: macos-latest
+    env:
+      BUILD_NAME: ${{"{{"}} needs.metadata.outputs.version {{"}}"}}
+      BUILD_NUMBER: ${{"{{"}} needs.metadata.outputs.build_number {{"}}"}}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-
-      - name: Install create-dmg
-        run: brew install create-dmg
-
-      - name: Build and Package DMG
-        run: |
-          chmod +x scripts/flutter/build_macos.sh
-          ./scripts/flutter/build_macos.sh
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+          channel: stable
+      - run: brew install create-dmg
+      - name: Build, sign and notarize DMG
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{"{{"}} secrets.MACOS_CERTIFICATE_BASE64 {{"}}"}}
+          MACOS_CERTIFICATE_PASSWORD: ${{"{{"}} secrets.MACOS_CERTIFICATE_PASSWORD {{"}}"}}
+          MACOS_SIGNING_IDENTITY: ${{"{{"}} secrets.MACOS_SIGNING_IDENTITY {{"}}"}}
+          APPLE_ID: ${{"{{"}} secrets.APPLE_ID {{"}}"}}
+          APPLE_APP_PASSWORD: ${{"{{"}} secrets.APPLE_APP_PASSWORD {{"}}"}}
+          APPLE_TEAM_ID: ${{"{{"}} secrets.APPLE_TEAM_ID {{"}}"}}
+        run: bash scripts/flutter/build_macos.sh
+      - uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: build/macos/Build/Products/Release/*.dmg
-{{- end }}
-
+          if-no-files-found: error
+{{ end }}
   publish-appcast:
-    name: Publish Artifacts & Update Appcast
-    needs: [
-      {{- if .EnableAndroid }}build-android,{{- end }}
-      {{- if .EnableWindows }}build-windows,{{- end }}
-      {{- if .EnableMacOS }}build-macos,{{- end }}
-    ]
+    needs: [metadata{{ if .EnableAndroid }}, build-android{{ end }}{{ if .EnableWindows }}, build-windows{{ end }}{{ if .EnableMacOS }}, build-macos{{ end }}]
     runs-on: ubuntu-latest
+    env:
+      BUILD_NAME: ${{"{{"}} needs.metadata.outputs.version {{"}}"}}
+      BUILD_NUMBER: ${{"{{"}} needs.metadata.outputs.build_number {{"}}"}}
+      RELEASE_CHANNEL: ${{"{{"}} needs.metadata.outputs.channel {{"}}"}}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
-
-      - name: Setup AWS CLI
-        uses: aws-actions/configure-aws-credentials@v4
+          go-version: '1.23.x'
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{"{{"}} secrets.S3_ACCESS_KEY_ID {{"}}"}}
           aws-secret-access-key: ${{"{{"}} secrets.S3_SECRET_ACCESS_KEY {{"}}"}}
-          aws-region: 'auto'
-
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+          aws-region: {{ yaml .S3Region }}
+{{ if or .EnableAndroid .EnableWindows .EnableMacOS }}
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: Update Appcast Manifest & Sync S3
+{{ end }}
+      - name: Sign, upload artifacts and publish manifest
         env:
-          S3_BUCKET: ${{"{{"}} secrets.S3_BUCKET {{"}}"}}
-          S3_ENDPOINT_URL: ${{"{{"}} secrets.S3_ENDPOINT_URL {{"}}"}}
           PRIVATE_KEY: ${{"{{"}} secrets.EVERUP_SIGNING_PRIVATE_KEY {{"}}"}}
-        run: |
-          # Fetch existing appcast.json from S3 if available
-          aws s3 cp s3://$S3_BUCKET/appcast.json appcast.json $ENDPOINT_ARG || true
-
-          # Iterate through artifacts and invoke update_appcast.go
-          go run scripts/common/update_appcast.go \
-            --manifest=appcast.json \
-            --channel=${{"{{"}} inputs.channel || 'beta' {{"}}"}} \
-            --version=${{"{{"}} github.ref_name {{"}}"}} \
-            --private-key="$PRIVATE_KEY"
-
-          # Upload updated appcast.json back to S3
-          chmod +x scripts/common/s3_upload.sh
-          ./scripts/common/s3_upload.sh appcast.json appcast.json
+        run: bash scripts/common/publish_release.sh artifacts

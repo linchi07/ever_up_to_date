@@ -14,17 +14,22 @@ class UpdateManifest {
 
   factory UpdateManifest.fromJson(Map<String, dynamic> json) {
     final schemaVersion = json['version'] as int? ?? 1;
+    if (schemaVersion != 1) {
+      throw FormatException('Unsupported appcast schema: $schemaVersion');
+    }
     final appId = json['app_id'] as String?;
     final channels = <String, ChannelInfo>{};
 
     final rawChannels = json['channels'];
-    if (rawChannels is Map) {
-      rawChannels.forEach((k, v) {
-        if (v is Map<String, dynamic>) {
-          channels[k.toString().toLowerCase()] = ChannelInfo.fromJson(v);
-        }
-      });
+    if (rawChannels is! Map) {
+      throw const FormatException('channels must be an object');
     }
+    rawChannels.forEach((k, v) {
+      if (v is! Map<String, dynamic>) {
+        throw FormatException('Channel $k must be an object');
+      }
+      channels[k.toString().toLowerCase()] = ChannelInfo.fromJson(v);
+    });
 
     return UpdateManifest(
       schemaVersion: schemaVersion,

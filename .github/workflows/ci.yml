@@ -1,0 +1,75 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  flutter:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - working-directory: example
+        run: flutter pub get
+      - working-directory: example
+        run: flutter test test/widget_test.dart
+      - if: runner.os == 'macOS'
+        working-directory: example
+        run: flutter test integration_test/plugin_integration_test.dart -d macos
+  android-native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - working-directory: example
+        run: flutter pub get
+      - working-directory: example
+        run: flutter build apk --debug
+      - working-directory: example/android
+        run: ./gradlew :ever_up_to_date:testDebugUnitTest --console=plain
+  builder-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ever_up_builder/go.mod
+      - name: Regenerate embedded resources and check synchronization
+        working-directory: ever_up_builder
+        run: |
+          go generate ./internal/resources
+          git diff --exit-code -- internal/resources/scripts internal/resources/templates
+      - working-directory: ever_up_builder
+        run: go test -race ./...
+      - working-directory: scripts/common
+        run: go test -race ./...
+      - run: python3 scripts/tests/test_release_pipeline.py
+      - name: Check shell syntax
+        run: |
+          for script in scripts/common/*.sh scripts/flutter/*.sh; do bash -n "$script"; done
+      - name: Install workflow and shell validators
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      - name: Validate actual workflow templates and repository workflows
+        working-directory: ever_up_builder
+        env:
+          EVERUP_ACTIONLINT: actionlint
+        run: go test -count=1 ./internal/generator
+      - run: actionlint
+      - run: shellcheck scripts/common/*.sh scripts/flutter/*.sh

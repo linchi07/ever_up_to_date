@@ -41,6 +41,12 @@ class UpdateIdleState extends UpdateState {
   String toString() => 'UpdateIdleState';
 }
 
+/// A release exists but is withdrawn or outside this installation's rollout cohort.
+class UpdateDeferredState extends UpdateState {
+  final String reason;
+  const UpdateDeferredState(this.reason);
+}
+
 /// Manifest is currently being fetched and evaluated.
 class UpdateCheckingState extends UpdateState {
   const UpdateCheckingState();
@@ -131,12 +137,30 @@ class UpdateErrorState extends UpdateState {
   final dynamic error;
   final StackTrace? stackTrace;
 
-  const UpdateErrorState({
-    required this.message,
-    this.error,
-    this.stackTrace,
-  });
+  const UpdateErrorState({required this.message, this.error, this.stackTrace});
 
   @override
   String toString() => 'UpdateErrorState(message: $message, error: $error)';
+}
+
+/// The running application's version has confirmed a previously launched update.
+class UpdateInstalledState extends UpdateState {
+  final String version;
+  const UpdateInstalledState(this.version);
+}
+
+/// Returned at startup after launching an installer on a previous run.
+class UpdateInstallationResult {
+  final String expectedVersion;
+  final int? expectedBuildNumber;
+  final String currentVersion;
+
+  /// False means the expected release is not running yet; the caller can offer retry.
+  final bool confirmed;
+  const UpdateInstallationResult({
+    required this.expectedVersion,
+    this.expectedBuildNumber,
+    required this.currentVersion,
+    required this.confirmed,
+  });
 }
