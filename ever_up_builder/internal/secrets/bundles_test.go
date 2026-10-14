@@ -86,3 +86,44 @@ func TestPackSecrets(t *testing.T) {
 		t.Errorf("expected non-empty certificate base64")
 	}
 }
+
+func TestLocalSecretStore(t *testing.T) {
+	root := t.TempDir()
+	store := &LocalSecretStore{
+		Common: &CommonSecrets{
+			S3AccessKeyID:     "test_key",
+			S3SecretAccessKey: "test_secret",
+			SigningPrivateKey: "test_priv_key",
+		},
+		Android: &AndroidSecrets{
+			KeystoreBase64:   "test_jks",
+			KeystorePassword: "test_pass",
+		},
+	}
+	if err := SaveLocalSecrets(root, store); err != nil {
+		t.Fatalf("SaveLocalSecrets failed: %v", err)
+	}
+
+	loaded, err := LoadLocalSecrets(root)
+	if err != nil {
+		t.Fatalf("LoadLocalSecrets failed: %v", err)
+	}
+	if loaded.Common == nil || loaded.Common.S3AccessKeyID != "test_key" {
+		t.Errorf("unexpected loaded common secrets: %+v", loaded.Common)
+	}
+	if loaded.Android == nil || loaded.Android.KeystorePassword != "test_pass" {
+		t.Errorf("unexpected loaded android secrets: %+v", loaded.Android)
+	}
+
+	// Verify GenerateSecretTemplates loads from local secrets
+	cfg := model.DefaultConfig()
+	cfg.EnableAndroid = true
+	templates := GenerateSecretTemplates(root, cfg)
+	var common CommonSecrets
+	if err := json.Unmarshal([]byte(templates["EVERUP_COMMON_SECRETS"]), &common); err != nil {
+		t.Fatal(err)
+	}
+	if common.S3AccessKeyID != "test_key" {
+		t.Errorf("expected S3AccessKeyID test_key from local store, got %q", common.S3AccessKeyID)
+	}
+}

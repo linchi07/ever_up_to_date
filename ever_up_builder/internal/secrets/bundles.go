@@ -42,6 +42,53 @@ type MacOSSecrets struct {
 	AppleTeamID         string `json:"apple_team_id"`
 }
 
+// LocalSecretStore represents the combined secrets saved securely in .everup/secrets.json.
+type LocalSecretStore struct {
+	Common  *CommonSecrets  `json:"common,omitempty"`
+	Android *AndroidSecrets `json:"android,omitempty"`
+	Windows *WindowsSecrets `json:"windows,omitempty"`
+	MacOS   *MacOSSecrets   `json:"macos,omitempty"`
+}
+
+// LocalSecretsPath returns the path to .everup/secrets.json in the project root.
+func LocalSecretsPath(root string) string {
+	return filepath.Join(root, ".everup", "secrets.json")
+}
+
+// LoadLocalSecrets loads .everup/secrets.json if it exists.
+func LoadLocalSecrets(root string) (*LocalSecretStore, error) {
+	path := LocalSecretsPath(root)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var store LocalSecretStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		return nil, fmt.Errorf("failed to parse local secrets: %w", err)
+	}
+	return &store, nil
+}
+
+// SaveLocalSecrets securely writes secrets to .everup/secrets.json with 0600 permissions.
+func SaveLocalSecrets(root string, store *LocalSecretStore) error {
+	dir := filepath.Join(root, ".everup")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	ignorePath := filepath.Join(root, ".gitignore")
+	existing, err := os.ReadFile(ignorePath)
+	if err == nil && !strings.Contains(string(existing), "/.everup/") {
+		_ = os.WriteFile(ignorePath, append(existing, []byte("\n/.everup/\n")...), 0644)
+	}
+
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := LocalSecretsPath(root)
+	return os.WriteFile(path, append(data, '\n'), 0600)
+}
+
 // FileToBase64 reads any binary file (JKS, PFX, P12) and encodes it to a Base64 string.
 func FileToBase64(filePath string) (string, error) {
 	data, err := os.ReadFile(filePath)
@@ -54,17 +101,23 @@ func FileToBase64(filePath string) (string, error) {
 // GenerateSecretTemplates returns a map of secret name to pretty-printed JSON string template.
 func GenerateSecretTemplates(root string, cfg model.ProjectConfig) map[string]string {
 	result := make(map[string]string)
+	localStore, _ := LoadLocalSecrets(root)
 
 	// 1. EVERUP_COMMON_SECRETS
 	common := CommonSecrets{
 		S3AccessKeyID:     "YOUR_S3_ACCESS_KEY_ID",
 		S3SecretAccessKey: "YOUR_S3_SECRET_ACCESS_KEY",
 	}
-	privateKeyPath := filepath.Join(root, ".everup", "signing-private.key")
-	if data, err := os.ReadFile(privateKeyPath); err == nil {
-		common.SigningPrivateKey = strings.TrimSpace(string(data))
-	} else {
-		common.SigningPrivateKey = "BASE64_ED25519_PRIVATE_KEY"
+	if localStore != nil && localStore.Common != nil {
+		common = *localStore.Common
+	}
+	if common.SigningPrivateKey == "" || common.SigningPrivateKey == "BASE64_ED25519_PRIVATE_KEY" {
+		privateKeyPath := filepath.Join(root, ".everup", "signing-private.key")
+		if data, err := os.ReadFile(privateKeyPath); err == nil {
+			common.SigningPrivateKey = strings.TrimSpace(string(data))
+		} else {
+			common.SigningPrivateKey = "BASE64_ED25519_PRIVATE_KEY"
+		}
 	}
 	if jsonStr, err := json.MarshalIndent(common, "", "  "); err == nil {
 		result["EVERUP_COMMON_SECRETS"] = string(jsonStr)
@@ -78,6 +131,9 @@ func GenerateSecretTemplates(root string, cfg model.ProjectConfig) map[string]st
 			KeyAlias:         "YOUR_KEY_ALIAS",
 			KeyPassword:      "YOUR_KEY_PASSWORD",
 		}
+		if localStore != nil && localStore.Android != nil {
+			android = *localStore.Android
+		}
 		if jsonStr, err := json.MarshalIndent(android, "", "  "); err == nil {
 			result["EVERUP_ANDROID_SECRETS"] = string(jsonStr)
 		}
@@ -88,6 +144,9 @@ func GenerateSecretTemplates(root string, cfg model.ProjectConfig) map[string]st
 		windows := WindowsSecrets{
 			CertificateBase64:   "BASE64_ENCODED_PFX_CERTIFICATE",
 			CertificatePassword: "YOUR_CERTIFICATE_PASSWORD",
+		}
+		if localStore != nil && localStore.Windows != nil {
+			windows = *localStore.Windows
 		}
 		if jsonStr, err := json.MarshalIndent(windows, "", "  "); err == nil {
 			result["EVERUP_WINDOWS_SECRETS"] = string(jsonStr)
@@ -103,6 +162,9 @@ func GenerateSecretTemplates(root string, cfg model.ProjectConfig) map[string]st
 			AppleID:             "developer@example.com",
 			AppleAppPassword:    "abcd-efgh-ijkl-mnop",
 			AppleTeamID:         "TEAMID1234",
+		}
+		if localStore != nil && localStore.MacOS != nil {
+			macOS = *localStore.MacOS
 		}
 		if jsonStr, err := json.MarshalIndent(macOS, "", "  "); err == nil {
 			result["EVERUP_MACOS_SECRETS"] = string(jsonStr)

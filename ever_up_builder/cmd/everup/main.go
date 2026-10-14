@@ -122,6 +122,27 @@ func run(args []string) error {
 				}
 				fmt.Println(jsonStr)
 				return nil
+			case "sync":
+				target := root
+				if len(args) > 2 {
+					target = args[2]
+				}
+				if !crypto.IsGhAvailable() {
+					return fmt.Errorf("gh CLI is required to sync secrets to GitHub")
+				}
+				cfg, err := model.LoadConfig(target)
+				if err != nil {
+					cfg = detector.DetectFlutterProject(target)
+				}
+				bundles := secrets.GenerateSecretTemplates(target, cfg)
+				for name, jsonStr := range bundles {
+					fmt.Printf("Injecting %s into GitHub Secrets...\n", name)
+					if err := crypto.SetGitHubSecretAt(target, name, jsonStr); err != nil {
+						return fmt.Errorf("failed to inject %s: %w", name, err)
+					}
+				}
+				fmt.Println("All secrets synced to GitHub successfully!")
+				return nil
 			}
 		}
 		cfg, err := model.LoadConfig(root)

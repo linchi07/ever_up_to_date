@@ -6,6 +6,12 @@ param(
 $ErrorActionPreference = "Stop"
 if (-not $BuildName -or -not $BuildNumber) { throw "BUILD_NAME and BUILD_NUMBER are required" }
 if (-not (Test-Path -LiteralPath $InnoScript)) { throw "Missing installer script: $InnoScript; run everup generate" }
+if (-not $env:EVERUP_WINDOWS_SECRETS -and (Test-Path -LiteralPath ".everup/secrets.json")) {
+    try {
+        $local = Get-Content -Raw -LiteralPath ".everup/secrets.json" | ConvertFrom-Json
+        if ($local.windows) { $env:EVERUP_WINDOWS_SECRETS = ($local.windows | ConvertTo-Json -Compress) }
+    } catch {}
+}
 if ($env:EVERUP_WINDOWS_SECRETS) {
     try {
         $sec = $env:EVERUP_WINDOWS_SECRETS | ConvertFrom-Json

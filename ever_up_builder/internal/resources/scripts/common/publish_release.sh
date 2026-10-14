@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -z "${EVERUP_COMMON_SECRETS:-}" && -f ".everup/secrets.json" ]]; then
+  EVERUP_COMMON_SECRETS="$(python3 -c 'import json; print(json.dumps(json.load(open(".everup/secrets.json")).get("common", {})))' 2>/dev/null || true)"
+fi
 if [[ -n "${EVERUP_COMMON_SECRETS:-}" ]]; then
   eval "$(python3 -c '
 import json, os, shlex

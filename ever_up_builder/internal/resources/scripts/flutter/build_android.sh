@@ -2,6 +2,9 @@
 set -euo pipefail
 : "${BUILD_NAME:?BUILD_NAME is required}"
 : "${BUILD_NUMBER:?BUILD_NUMBER is required}"
+if [[ -z "${EVERUP_ANDROID_SECRETS:-}" && -f ".everup/secrets.json" ]]; then
+  EVERUP_ANDROID_SECRETS="$(python3 -c 'import json; print(json.dumps(json.load(open(".everup/secrets.json")).get("android", {})))' 2>/dev/null || true)"
+fi
 if [[ -n "${EVERUP_ANDROID_SECRETS:-}" ]]; then
   eval "$(python3 -c '
 import json, os, shlex

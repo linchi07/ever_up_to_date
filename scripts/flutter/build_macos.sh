@@ -10,6 +10,9 @@ cleanup() {
   rm -rf "$TASK_DIR"
 }
 trap cleanup EXIT
+if [[ -z "${EVERUP_MACOS_SECRETS:-}" && -f ".everup/secrets.json" ]]; then
+  EVERUP_MACOS_SECRETS="$(python3 -c 'import json; print(json.dumps(json.load(open(".everup/secrets.json")).get("macos", {})))' 2>/dev/null || true)"
+fi
 if [[ -n "${EVERUP_MACOS_SECRETS:-}" ]]; then
   eval "$(python3 -c '
 import json, os, shlex
