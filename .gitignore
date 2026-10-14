@@ -34,3 +34,4 @@ migrate_working_dir/
 **/generated_plugin_registrant.*
 **/GeneratedPluginRegistrant.*
 **/generated_plugins.cmake
+/bin/

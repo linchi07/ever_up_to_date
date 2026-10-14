@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EverUp 图像素材工坊</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    header .badge {
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+    .main-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+    .canvas-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: #020617;
+      overflow: auto;
+      padding: 20px;
+    }
+    canvas {
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+      border-radius: 4px;
+      cursor: crosshair;
+    }
+    .sidebar {
+      width: 320px;
+      background: var(--card);
+      border-left: 1px solid var(--border);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .panel-title { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .btn-group { display: flex; flex-direction: column; gap: 8px; }
+    button {
+      background: var(--border);
+      color: var(--text);
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover { background: #475569; }
+    button.active {
+      background: var(--primary);
+      color: white;
+    }
+    button.primary-action {
+      background: var(--primary);
+      color: white;
+      margin-top: auto;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    button.primary-action:hover { background: var(--primary-hover); }
+    .preview-box {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #previewCanvas {
+      max-width: 128px;
+      max-height: 128px;
+      border-radius: 8px;
+      background: #000;
+    }
+    .status-msg {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EverUp 图像素材工作坊 <span class="badge">Visual Cropper</span></h1>
+    <span style="font-size: 13px; color: var(--muted);">本地临时会话 (会话完成自动关闭)</span>
+  </header>
+
+  <div class="main-container">
+    <div class="canvas-area">
+      <canvas id="cropCanvas"></canvas>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel-title">裁切预设 (Aspect Ratio)</div>
+      <div class="btn-group">
+        <button id="btnRatioSquare" class="active">1:1 应用主图标 (Square)</button>
+        <button id="btnRatioInno">164:314 Inno 向导横幅 (Banner)</button>
+      </div>
+
+      <div class="panel-title">实时预览 (Preview)</div>
+      <div class="preview-box">
+        <canvas id="previewCanvas" width="128" height="128"></canvas>
+        <div id="dimText" style="font-size: 12px; color: var(--muted);">512 x 512 px</div>
+      </div>
+
+      <button id="btnSave" class="primary-action">✓ 保存并生成全平台素材</button>
+      <div id="statusMsg" class="status-msg">在画布上拖拽调整选框，完成后点击上方按钮</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('cropCanvas');
+    const ctx = canvas.getContext('2d');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const pctx = previewCanvas.getContext('2d');
+    const statusMsg = document.getElementById('statusMsg');
+
+    let img = new Image();
+    let currentRatio = 1.0; // 1:1 by default
+    let cropBox = { x: 50, y: 50, width: 300, height: 300 };
+    let isDragging = false;
+    let dragStart = { x: 0, y: 0 };
+
+    img.onload = () => {
+      canvas.width = Math.min(img.width, 800);
+      canvas.height = (canvas.width / img.width) * img.height;
+      
+      const initSize = Math.min(canvas.width, canvas.height) * 0.8;
+      setCropDimensions(initSize, initSize / currentRatio);
+      draw();
+    };
+    img.src = '/api/image';
+
+    function setCropDimensions(w, h) {
+      cropBox.width = w;
+      cropBox.height = h;
+      cropBox.x = (canvas.width - w) / 2;
+      cropBox.y = (canvas.height - h) / 2;
+      updatePreview();
+    }
+
+    document.getElementById('btnRatioSquare').onclick = (e) => {
+      document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      currentRatio = 1.0;
+      const size = Math.min(cropBox.width, cropBox.height);
+      setCropDimensions(size, size);
+      draw();
+    };
+
+    document.getElementById('btnRatioInno').onclick = (e) => {
+      document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      currentRatio = 164 / 314;
+      const w = 200;
+      setCropDimensions(w, w / currentRatio);
+      draw();
+    };
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      // Dark overlay
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Clear crop area
+      ctx.drawImage(
+        img,
+        (cropBox.x / canvas.width) * img.width,
+        (cropBox.y / canvas.height) * img.height,
+        (cropBox.width / canvas.width) * img.width,
+        (cropBox.height / canvas.height) * img.height,
+        cropBox.x, cropBox.y, cropBox.width, cropBox.height
+      );
+
+      // Border and grid
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cropBox.x, cropBox.y, cropBox.width, cropBox.height);
+
+      updatePreview();
+    }
+
+    function updatePreview() {
+      previewCanvas.width = 128;
+      previewCanvas.height = 128 / currentRatio;
+      pctx.drawImage(
+        img,
+        (cropBox.x / canvas.width) * img.width,
+        (cropBox.y / canvas.height) * img.height,
+        (cropBox.width / canvas.width) * img.width,
+        (cropBox.height / canvas.height) * img.height,
+        0, 0, previewCanvas.width, previewCanvas.height
+      );
+      document.getElementById('dimText').innerText = 
+        `${Math.round((cropBox.width / canvas.width) * img.width)} x ${Math.round((cropBox.height / canvas.height) * img.height)} px`;
+    }
+
+    canvas.onmousedown = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      if (mx >= cropBox.x && mx <= cropBox.x + cropBox.width &&
+          my >= cropBox.y && my <= cropBox.y + cropBox.height) {
+        isDragging = true;
+        dragStart.x = mx - cropBox.x;
+        dragStart.y = my - cropBox.y;
+      }
+    };
+
+    window.onmousemove = (e) => {
+      if (!isDragging) return;
+      const rect = canvas.getBoundingClientRect();
+      let nx = e.clientX - rect.left - dragStart.x;
+      let ny = e.clientY - rect.top - dragStart.y;
+
+      nx = Math.max(0, Math.min(nx, canvas.width - cropBox.width));
+      ny = Math.max(0, Math.min(ny, canvas.height - cropBox.height));
+
+      cropBox.x = nx;
+      cropBox.y = ny;
+      draw();
+    };
+
+    window.onmouseup = () => { isDragging = false; };
+
+    document.getElementById('btnSave').onclick = async () => {
+      statusMsg.innerText = '正在保存并生成全平台图标素材...';
+      const outCanvas = document.createElement('canvas');
+      const realW = Math.round((cropBox.width / canvas.width) * img.width);
+      const realH = Math.round((cropBox.height / canvas.height) * img.height);
+      outCanvas.width = realW;
+      outCanvas.height = realH;
+      const octx = outCanvas.getContext('2d');
+      octx.drawImage(
+        img,
+        (cropBox.x / canvas.width) * img.width,
+        (cropBox.y / canvas.height) * img.height,
+        realW, realH,
+        0, 0, realW, realH
+      );
+
+      const dataUrl = outCanvas.toDataURL('image/png');
+      try {
+        const resp = await fetch('/api/crop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_data: dataUrl })
+        });
+        if (resp.ok) {
+          statusMsg.innerText = '✓ 素材处理完成！本窗口可关闭，请返回终端继续。';
+          statusMsg.style.color = '#4ade80';
+          setTimeout(() => window.close(), 1500);
+        } else {
+          statusMsg.innerText = '保存失败，请检查终端日志。';
+          statusMsg.style.color = '#ef4444';
+        }
+      } catch (err) {
+        statusMsg.innerText = '网络异常: ' + err;
+      }
+    };
+  </script>
+</body>
+</html>
